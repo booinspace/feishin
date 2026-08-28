@@ -1,12 +1,11 @@
-import { useWavesurfer } from '@wavesurfer/react';
 import formatDuration from 'format-duration';
 import { motion } from 'motion/react';
 import { KeyboardEvent, PointerEvent, useEffect, useRef, useState } from 'react';
 
 import styles from './playerbar-waveform.module.css';
-import { analyzeRgbWaveform, RgbWaveformData } from './rgb-waveform';
+import { RgbWaveformData } from './rgb-waveform';
+import { getCachedRgbWaveform, loadRgbWaveform } from './rgb-waveform-cache';
 
-import { useSongUrl } from '/@/renderer/features/player/audio-player/hooks/use-stream-url';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import {
     BarAlign,
@@ -19,16 +18,15 @@ import { logger } from '/@/renderer/utils/logger';
 import { Spinner } from '/@/shared/components/spinner/spinner';
 import { Text } from '/@/shared/components/text/text';
 
-const ANALYSIS_SAMPLE_RATE = 12_000;
-
 export const PlayerbarWaveform = () => {
     const currentSong = usePlayerSong();
     const playerbarSlider = usePlayerbarSlider();
     const currentTime = usePlayerTimestamp();
+    const { transcode } = usePlaybackSettings();
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const decoderContainerRef = useRef<HTMLDivElement>(null);
-    const audioElementRef = useRef<HTMLAudioElement>(document.createElement('audio'));
+    const currentSongRef = useRef(currentSong);
     const seekTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const transcodeRef = useRef(transcode);
     const { mediaSeekToTimestamp } = usePlayer();
     const [isDragging, setIsDragging] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -40,97 +38,55 @@ export const PlayerbarWaveform = () => {
     const displayTime = previewTime ?? currentTime;
     const progress = songDuration ? Math.max(0, Math.min(1, displayTime / songDuration)) : 0;
 
-    const { transcode } = usePlaybackSettings();
-    const streamUrl = useSongUrl(currentSong, true, {
-        bitrate: 64,
-        enabled: transcode.enabled,
-        format: 'mp3',
-    });
-
-    const { wavesurfer } = useWavesurfer({
-        container: decoderContainerRef,
-        cursorWidth: 0,
-        height: 1,
-        interact: false,
-        media: audioElementRef.current,
-        progressColor: 'transparent',
-        sampleRate: ANALYSIS_SAMPLE_RATE,
-        waveColor: 'transparent',
-    });
+    currentSongRef.current = currentSong;
+    transcodeRef.current = transcode;
 
     useEffect(() => {
-        setIsLoading(true);
-        setWaveform(null);
-    }, [streamUrl]);
-
-    useEffect(() => {
-        if (!wavesurfer || !streamUrl) return;
-
         let cancelled = false;
-        let loadStarted = false;
-        const analysisController = new AbortController();
+        const song = currentSongRef.current;
+        const cachedWaveform = getCachedRgbWaveform(song);
+        setIsLoading(!cachedWaveform);
+        setWaveform(null);
 
-        const handleReady = async () => {
-            if (cancelled || !loadStarted) return;
-
-            try {
-                const audioBuffer = wavesurfer.getDecodedData();
-                if (!audioBuffer) {
-                    throw new Error('Decoded audio is unavailable');
-                }
-
-                const analysis = await analyzeRgbWaveform(audioBuffer, analysisController.signal);
+        const showWaveform = (analysis: RgbWaveformData) => {
+            window.requestAnimationFrame(() => {
                 if (cancelled) return;
                 setWaveform(analysis);
                 setIsLoading(false);
+            });
+        };
+
+        const loadWaveform = async () => {
+            if (!song) return;
+
+            if (cachedWaveform) {
+                showWaveform(cachedWaveform);
+                return;
+            }
+
+            await new Promise<void>((resolve) => {
+                window.setTimeout(
+                    resolve,
+                    playerbarSlider?.loadingDelay ? playerbarSlider.loadingDelay * 1000 : 2000,
+                );
+            });
+            if (cancelled) return;
+
+            try {
+                showWaveform(await loadRgbWaveform(song, transcodeRef.current));
             } catch (error) {
-                if (cancelled || (error instanceof Error && error.name === 'AbortError')) return;
+                if (cancelled) return;
                 logger.warn('RGB waveform analysis failed', { error: String(error) });
                 setIsLoading(false);
             }
         };
 
-        const handleError = (error?: unknown) => {
-            if (cancelled || !loadStarted) return;
-            if (error instanceof Error && error.name === 'AbortError') return;
-            logger.warn('RGB waveform audio load failed', { error: String(error) });
-            setIsLoading(false);
-        };
-
-        wavesurfer.on('ready', handleReady);
-        wavesurfer.on('error', handleError);
-
-        const waveformTimeout = setTimeout(
-            () => {
-                if (cancelled) return;
-                loadStarted = true;
-                wavesurfer.load(streamUrl).catch(handleError);
-            },
-            playerbarSlider?.loadingDelay ? playerbarSlider.loadingDelay * 1000 : 2000,
-        );
+        void loadWaveform();
 
         return () => {
             cancelled = true;
-            analysisController.abort();
-            wavesurfer.un('ready', handleReady);
-            wavesurfer.un('error', handleError);
-            clearTimeout(waveformTimeout);
         };
-    }, [playerbarSlider.loadingDelay, streamUrl, wavesurfer]);
-
-    useEffect(() => {
-        if (!wavesurfer) return;
-
-        wavesurfer.setVolume(0);
-        const mediaElement = wavesurfer.getMediaElement();
-        mediaElement.muted = true;
-        mediaElement.volume = 0;
-
-        const preventPlay = () => wavesurfer.pause();
-        wavesurfer.on('play', preventPlay);
-
-        return () => wavesurfer.un('play', preventPlay);
-    }, [wavesurfer]);
+    }, [currentSong?._uniqueId, playerbarSlider?.loadingDelay, transcode.enabled]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -263,7 +219,6 @@ export const PlayerbarWaveform = () => {
 
     return (
         <div className={styles.wavesurferContainer}>
-            <div className={styles.decoder} ref={decoderContainerRef} />
             {isLoading && !waveform && (
                 <div aria-label="Loading waveform" className={styles.loadingSpinner} role="status">
                     <Spinner size="sm" />

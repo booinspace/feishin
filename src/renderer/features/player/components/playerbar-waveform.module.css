@@ -4,15 +4,6 @@
     height: 26px;
 }
 
-.decoder {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    pointer-events: none;
-    opacity: 0;
-}
-
 .loading-spinner {
     position: absolute;
     inset: 0;

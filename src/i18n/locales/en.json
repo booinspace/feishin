@@ -1278,6 +1278,8 @@
         "volumeWidth": "Volume slider width",
         "waveformLoadingDelay": "Waveform loading delay",
         "waveformLoadingDelay_description": "Delay in seconds before loading waveform. Increase this value if you are experiencing stutters when using the web player.",
+        "waveformPreloadCount": "Pre-analyze upcoming tracks",
+        "waveformPreloadCount_description": "Analyze this many upcoming tracks in the background so their waveforms are ready when you skip. Set to 0 to disable.",
         "webAudio_description": "Use web audio. This enables advanced features like ReplayGain. Disable if you experience otherwise",
         "webAudio": "Use web audio",
         "windowBarStyle_description": "Select the style of the window bar",

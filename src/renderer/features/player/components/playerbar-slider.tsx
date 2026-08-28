@@ -4,6 +4,7 @@ import { lazy, Suspense } from 'react';
 
 import { PlayerbarSeekSlider } from './playerbar-seek-slider';
 import styles from './playerbar-slider.module.css';
+import { PlayerbarWaveformPreloader } from './playerbar-waveform-preloader';
 
 import { ScrobbleStatus } from '/@/renderer/features/player/components/scrobble-status';
 import {
@@ -59,6 +60,7 @@ export const PlayerbarSlider = () => {
                             <PlayerbarWaveform />
                         </Suspense>
                     )}
+                    {isWaveform && <PlayerbarWaveformPreloader />}
                     <PlayerbarSeekSlider max={songDuration} min={0} />
                 </div>
                 <div className={styles.sliderValueWrapper}>
