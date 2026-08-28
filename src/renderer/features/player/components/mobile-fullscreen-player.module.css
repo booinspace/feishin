@@ -154,7 +154,11 @@
 }
 
 .slider-wrapper {
+    display: flex;
     flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    justify-content: center;
 }
 
 .controls-container {

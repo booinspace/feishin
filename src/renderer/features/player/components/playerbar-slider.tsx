@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import formatDuration from 'format-duration';
 import { lazy, Suspense } from 'react';
 
@@ -40,18 +41,25 @@ export const PlayerbarSlider = () => {
 
     return (
         <>
-            <div className={styles.sliderContainer}>
+            <div
+                className={clsx(styles.sliderContainer, {
+                    [styles.waveformSliderContainer]: isWaveform,
+                })}
+            >
                 <div className={styles.sliderValueWrapper}>
                     <ScrobbleStatus />
                 </div>
-                <div className={styles.sliderWrapper}>
-                    {isWaveform ? (
+                <div
+                    className={clsx(styles.sliderWrapper, {
+                        [styles.waveformSliderWrapper]: isWaveform,
+                    })}
+                >
+                    {isWaveform && (
                         <Suspense fallback={<Spinner />}>
                             <PlayerbarWaveform />
                         </Suspense>
-                    ) : (
-                        <PlayerbarSeekSlider max={songDuration} min={0} />
                     )}
+                    <PlayerbarSeekSlider max={songDuration} min={0} />
                 </div>
                 <div className={styles.sliderValueWrapper}>
                     <Text
